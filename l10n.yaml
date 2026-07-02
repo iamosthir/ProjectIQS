@@ -1,0 +1,7 @@
+# Flutter gen-l10n configuration. Arabic is the primary app language (RTL);
+# English is the toggle. The template carries the full key set.
+arb-dir: lib/shared/l10n
+template-arb-file: app_en.arb
+output-localization-file: app_localizations.dart
+output-class: AppLocalizations
+nullable-getter: false
