@@ -41,7 +41,31 @@ return [
         'host' => env('API_FOOTBALL_HOST', 'v3.football.api-sports.io'),
         'timezone' => env('API_FOOTBALL_TIMEZONE', 'Asia/Baghdad'),
         'daily_limit' => (int) env('API_FOOTBALL_DAILY_LIMIT', 100),
-        'live_poll_seconds' => (int) env('API_FOOTBALL_LIVE_POLL_SECONDS', 60),
+        'live_poll_seconds' => (int) env('API_FOOTBALL_LIVE_POLL_SECONDS', 30),
+
+        /*
+         * Automatic sync cadences for the league seasons subscribed via
+         * `seasons.auto_sync`. Live scores poll on `live_poll_seconds`
+         * above; everything else self-paces inside the every-minute
+         * `sync:auto` tick using these intervals. All values are tunable
+         * per API plan size — the daily budget guard is the final backstop.
+         */
+        'auto_sync' => [
+            // Full fixtures list of a subscribed season (insert + update).
+            'fixtures_minutes' => (int) env('API_FOOTBALL_SYNC_FIXTURES_MINUTES', 15),
+            // League table refresh.
+            'standings_minutes' => (int) env('API_FOOTBALL_SYNC_STANDINGS_MINUTES', 60),
+            // Squads/venues move rarely.
+            'teams_minutes' => (int) env('API_FOOTBALL_SYNC_TEAMS_MINUTES', 1440),
+            // Scorer charts.
+            'top_scorers_minutes' => (int) env('API_FOOTBALL_SYNC_TOP_SCORERS_MINUTES', 360),
+            // Pull pre-match lineups for fixtures kicking off within this window…
+            'lineup_lookahead_minutes' => (int) env('API_FOOTBALL_SYNC_LINEUP_LOOKAHEAD_MINUTES', 60),
+            // …retrying at most once per this interval per fixture.
+            'lineup_retry_minutes' => (int) env('API_FOOTBALL_SYNC_LINEUP_RETRY_MINUTES', 15),
+            // In-play events/statistics refresh cadence per live fixture.
+            'live_details_seconds' => (int) env('API_FOOTBALL_SYNC_LIVE_DETAILS_SECONDS', 60),
+        ],
     ],
 
     'zaincash' => [

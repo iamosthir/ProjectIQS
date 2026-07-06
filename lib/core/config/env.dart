@@ -19,7 +19,7 @@ class Env {
   // Default flavor: 'dev' = local LAN server, 'prod' = live (apifootball.teknoiq.com).
   // Flip this one value to switch the default for every build.
   static const String _flavorName =
-      String.fromEnvironment('FLAVOR', defaultValue: 'dev');
+      String.fromEnvironment('FLAVOR', defaultValue: 'prod');
 
   /// The active build flavor.
   static Flavor get flavor => switch (_flavorName) {

@@ -4,13 +4,20 @@ namespace App\Services\ApiFootball;
 
 use App\Models\Fixture;
 use App\Models\League;
-use App\Models\Team;
-use App\Models\Venue;
+use App\Models\Season;
 use App\Support\Enums\FixtureStatusGroup;
+use App\Support\Enums\Source;
 use Illuminate\Support\Carbon;
 
 class FixtureSync extends FootballSync
 {
+    /**
+     * Memoized `league_id:year` → season id lookups for the current run.
+     *
+     * @var array<string, int|null>
+     */
+    private array $seasonIds = [];
+
     /**
      * Sync all fixtures of a league season.
      */
@@ -92,6 +99,7 @@ class FixtureSync extends FootballSync
             /** @var Fixture|null $fixture */
             $fixture = $this->upsert(Fixture::class, $id, [
                 'league_id' => $leagueId,
+                'season_id' => $this->resolveSeasonId($leagueId, $lg['season'] ?? null),
                 'home_team_id' => $homeId,
                 'away_team_id' => $awayId,
                 'venue_id' => $this->resolveVenueId($fx['venue'] ?? []),
@@ -126,6 +134,36 @@ class FixtureSync extends FootballSync
         }
 
         return $count;
+    }
+
+    /**
+     * Map the payload's `league.season` year onto our seasons table,
+     * creating the row when the season hasn't been imported yet so the
+     * fixture ↔ season linkage never silently drops.
+     */
+    protected function resolveSeasonId(int $leagueId, mixed $year): ?int
+    {
+        $year = (int) ($year ?? 0);
+
+        if ($year === 0) {
+            return null;
+        }
+
+        $key = $leagueId.':'.$year;
+
+        if (! array_key_exists($key, $this->seasonIds)) {
+            $this->seasonIds[$key] = Season::query()
+                ->where('league_id', $leagueId)
+                ->where('year', $year)
+                ->value('id')
+                ?? Season::create([
+                    'league_id' => $leagueId,
+                    'source' => Source::ApiFootball,
+                    'year' => $year,
+                ])->id;
+        }
+
+        return $this->seasonIds[$key];
     }
 
     /**

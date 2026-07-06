@@ -5,15 +5,17 @@ namespace App\Models;
 use App\Models\Concerns\HasCanonicalSource;
 use App\Support\Enums\FixtureStatusGroup;
 use App\Support\Enums\MatchWinner;
+use Database\Factories\FixtureFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Fixture extends Model
 {
-    /** @use HasFactory<\Database\Factories\FixtureFactory> */
+    /** @use HasFactory<FixtureFactory> */
     use HasCanonicalSource, HasFactory;
 
     /**
@@ -25,7 +27,7 @@ class Fixture extends Model
         'referee', 'referee_assistant_1', 'referee_assistant_2',
         'referee_fourth_official', 'supervisor',
         'match_datetime', 'timezone', 'status_short', 'status_long',
-        'status_group', 'elapsed',
+        'status_group', 'elapsed', 'period_first_at', 'period_second_at', 'status_extra',
         'home_goals', 'away_goals', 'home_ht', 'away_ht', 'home_ft', 'away_ft',
         'home_et', 'away_et', 'home_pen', 'away_pen', 'winner',
         'is_featured', 'has_lineups', 'has_events', 'has_statistics',
@@ -41,9 +43,12 @@ class Fixture extends Model
     {
         return [
             'match_datetime' => 'datetime',
+            'period_first_at' => 'datetime',
+            'period_second_at' => 'datetime',
             'status_group' => FixtureStatusGroup::class,
             'winner' => MatchWinner::class,
             'elapsed' => 'integer',
+            'status_extra' => 'integer',
             'is_featured' => 'boolean',
             'has_lineups' => 'boolean',
             'has_events' => 'boolean',
@@ -148,6 +153,32 @@ class Fixture extends Model
     public function predictions(): HasMany
     {
         return $this->hasMany(FixturePrediction::class);
+    }
+
+    /**
+     * @return HasMany<FixturePlayerStatistic, $this>
+     */
+    public function playerStatistics(): HasMany
+    {
+        return $this->hasMany(FixturePlayerStatistic::class);
+    }
+
+    /**
+     * @return HasMany<Injury, $this>
+     */
+    public function injuries(): HasMany
+    {
+        return $this->hasMany(Injury::class);
+    }
+
+    /**
+     * Editorial/algorithmic forecast (API-Football "predictions").
+     *
+     * @return HasOne<FixtureForecast, $this>
+     */
+    public function forecast(): HasOne
+    {
+        return $this->hasOne(FixtureForecast::class);
     }
 
     /**

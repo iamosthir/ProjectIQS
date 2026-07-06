@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCanonicalSource;
+use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Team extends Model
 {
-    /** @use HasFactory<\Database\Factories\TeamFactory> */
+    /** @use HasFactory<TeamFactory> */
     use HasCanonicalSource, HasFactory;
 
     /**
@@ -19,7 +20,7 @@ class Team extends Model
      */
     protected $fillable = [
         'source', 'external_id', 'name_ar', 'name_en', 'short_code',
-        'country_name', 'founded_year', 'is_national', 'logo_path',
+        'country_id', 'country_name', 'founded_year', 'is_national', 'logo_path',
         'venue_id', 'club_id', 'is_active', 'is_locked',
         'external_payload', 'last_synced_at',
     ];
@@ -42,6 +43,30 @@ class Team extends Model
     public function venue(): BelongsTo
     {
         return $this->belongsTo(Venue::class);
+    }
+
+    /**
+     * @return BelongsTo<Country, $this>
+     */
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
+    }
+
+    /**
+     * @return HasMany<Coach, $this>
+     */
+    public function coaches(): HasMany
+    {
+        return $this->hasMany(Coach::class);
+    }
+
+    /**
+     * @return HasMany<PlayerStatistic, $this>
+     */
+    public function playerStatistics(): HasMany
+    {
+        return $this->hasMany(PlayerStatistic::class);
     }
 
     /**

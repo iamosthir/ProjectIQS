@@ -3,29 +3,42 @@
 namespace Database\Seeders;
 
 use App\Models\AppNotification;
+use App\Models\AppVersion;
 use App\Models\Banner;
 use App\Models\Club;
 use App\Models\ClubBoardMember;
 use App\Models\ClubNews;
 use App\Models\ClubVerification;
+use App\Models\Coach;
+use App\Models\CoachCareer;
 use App\Models\Comment;
+use App\Models\Country;
 use App\Models\DeviceToken;
 use App\Models\FanGroup;
 use App\Models\FanGroupChant;
 use App\Models\FanGroupMedia;
 use App\Models\FanGroupVerification;
 use App\Models\Fixture;
+use App\Models\FixtureForecast;
+use App\Models\FixtureNews;
+use App\Models\FixturePlayerStatistic;
+use App\Models\FixturePrediction;
+use App\Models\Injury;
 use App\Models\League;
 use App\Models\Listing;
 use App\Models\MarketplaceCategory;
 use App\Models\NotificationBatch;
 use App\Models\Payment;
 use App\Models\Player;
+use App\Models\PlayerStatistic;
 use App\Models\Season;
+use App\Models\Sidelined;
 use App\Models\Standing;
 use App\Models\Store;
 use App\Models\Team;
 use App\Models\TopScorer;
+use App\Models\Transfer;
+use App\Models\Trophy;
 use App\Models\User;
 use App\Models\Venue;
 use App\Support\Enums\BannerPlacement;
@@ -34,6 +47,7 @@ use App\Support\Enums\ListingStatus;
 use App\Support\Enums\NotificationBatchStatus;
 use App\Support\Enums\StoreStatus;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Collection;
 
 /**
  * Generates a realistic demo dataset so the Flutter app and the full admin
@@ -72,7 +86,7 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * @return array{0: User, 1: User, 2: User, 3: User, 4: \Illuminate\Support\Collection<int, User>}
+     * @return array{0: User, 1: User, 2: User, 3: User, 4: Collection<int, User>}
      */
     private function seedUsers(): array
     {
@@ -97,7 +111,7 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, User>  $crowd
+     * @param  Collection<int, User>  $crowd
      */
     private function seedMatchModule(User $demo, $crowd): void
     {
@@ -165,7 +179,7 @@ class DemoDataSeeder extends Seeder
         $hot = $upcoming->first();
         if ($hot !== null) {
             foreach ($crowd->take(8) as $user) {
-                \App\Models\FixturePrediction::factory()->create([
+                FixturePrediction::factory()->create([
                     'fixture_id' => $hot->id,
                     'user_id' => $user->id,
                 ]);
@@ -185,13 +199,98 @@ class DemoDataSeeder extends Seeder
         // Fixture news on the live + first finished match (the News tab).
         collect([$live->first(), $finished->first()])
             ->filter()
-            ->each(fn (Fixture $fixture) => \App\Models\FixtureNews::factory()
+            ->each(fn (Fixture $fixture) => FixtureNews::factory()
                 ->count(3)
                 ->create(['fixture_id' => $fixture->id]));
+
+        $this->seedFootballParity($league, $season, $teams, $finished, $upcoming);
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, User>  $crowd
+     * API-Football parity data: countries, coaches + careers, season player
+     * statistics (feeds /football/players + topscorers), per-match player
+     * statistics, injuries, transfers, trophies, sidelined and a forecast —
+     * so every /api/v1/football/* endpoint answers with data out of the box.
+     *
+     * @param  Collection<int, Team>  $teams
+     * @param  Collection<int, Fixture>  $finished
+     * @param  Collection<int, Fixture>  $upcoming
+     */
+    private function seedFootballParity(League $league, Season $season, $teams, $finished, $upcoming): void
+    {
+        $iraq = Country::factory()->create(['name_ar' => 'العراق', 'name_en' => 'Iraq', 'code' => 'IQ']);
+        Country::factory()->create(['name_ar' => 'السعودية', 'name_en' => 'Saudi Arabia', 'code' => 'SA']);
+
+        $league->update(['country_id' => $iraq->id]);
+        Team::whereIn('id', $teams->pluck('id'))->update(['country_id' => $iraq->id]);
+
+        // A coach (with career history) for each of the two squad teams.
+        foreach ($teams->take(2) as $team) {
+            $coach = Coach::factory()->create(['team_id' => $team->id, 'birth_country' => 'Iraq']);
+            CoachCareer::factory()->create([
+                'coach_id' => $coach->id,
+                'team_id' => $team->id,
+                'start_date' => now()->subYears(2),
+                'end_date' => null,
+            ]);
+            CoachCareer::factory()->create(['coach_id' => $coach->id]);
+            Trophy::factory()->create(['player_id' => null, 'coach_id' => $coach->id]);
+        }
+
+        // Season statistics for every squad player (drives topscorers etc.).
+        foreach ($teams->take(2) as $team) {
+            foreach ($team->players as $player) {
+                PlayerStatistic::factory()->create([
+                    'player_id' => $player->id,
+                    'team_id' => $team->id,
+                    'league_id' => $league->id,
+                    'season_id' => $season->id,
+                    'position' => $player->position,
+                ]);
+            }
+        }
+
+        // Per-match player statistics on the first finished fixture.
+        $match = $finished->first();
+        if ($match !== null) {
+            foreach ($teams->take(2) as $team) {
+                foreach ($team->players->take(5) as $player) {
+                    FixturePlayerStatistic::factory()->create([
+                        'fixture_id' => $match->id,
+                        'team_id' => $team->id,
+                        'player_id' => $player->id,
+                    ]);
+                }
+            }
+        }
+
+        // Injuries ahead of the next fixture + transfer/sidelined history.
+        $next = $upcoming->first();
+        $squad = $teams->first()?->players ?? collect();
+        foreach ($squad->take(2) as $player) {
+            Injury::factory()->create([
+                'player_id' => $player->id,
+                'team_id' => $teams->first()->id,
+                'league_id' => $league->id,
+                'season_id' => $season->id,
+                'fixture_id' => $next?->id,
+            ]);
+            Transfer::factory()->create(['player_id' => $player->id, 'team_in_id' => $teams->first()->id]);
+            Trophy::factory()->create(['player_id' => $player->id]);
+            Sidelined::factory()->create(['player_id' => $player->id]);
+        }
+
+        // Editorial forecast for the next fixture (GET /football/predictions).
+        if ($next !== null) {
+            FixtureForecast::factory()->create([
+                'fixture_id' => $next->id,
+                'winner_team_id' => $next->home_team_id,
+            ]);
+        }
+    }
+
+    /**
+     * @param  Collection<int, User>  $crowd
      */
     private function seedMarketplace(User $seller, $crowd): void
     {
@@ -239,7 +338,7 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, User>  $crowd
+     * @param  Collection<int, User>  $crowd
      */
     private function seedClubs(User $clubAdmin, $crowd): void
     {
@@ -265,7 +364,7 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, User>  $crowd
+     * @param  Collection<int, User>  $crowd
      */
     private function seedFanGroups(User $groupAdmin, $crowd): void
     {
@@ -290,7 +389,7 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, User>  $crowd
+     * @param  Collection<int, User>  $crowd
      */
     private function seedPayments(User $demo, $crowd): void
     {
@@ -314,7 +413,7 @@ class DemoDataSeeder extends Seeder
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, User>  $crowd
+     * @param  Collection<int, User>  $crowd
      */
     private function seedNotifications(User $demo, $crowd): void
     {
@@ -353,14 +452,14 @@ class DemoDataSeeder extends Seeder
 
     private function seedAppVersions(): void
     {
-        \App\Models\AppVersion::create([
+        AppVersion::create([
             'platform' => 'android', 'version' => '1.2.0', 'build_number' => 12,
             'min_supported_version' => '1.0.0', 'is_force_update' => false,
             'store_url' => 'https://play.google.com/store/apps/details?id=iq.iqs',
             'changelog_ar' => 'تحسينات وإصلاحات.', 'changelog_en' => 'Improvements and fixes.',
             'is_active' => true, 'released_at' => now()->subWeek(),
         ]);
-        \App\Models\AppVersion::create([
+        AppVersion::create([
             'platform' => 'ios', 'version' => '1.2.0', 'build_number' => 12,
             'min_supported_version' => '1.0.0', 'is_force_update' => false,
             'store_url' => 'https://apps.apple.com/app/id000000000',
@@ -372,8 +471,8 @@ class DemoDataSeeder extends Seeder
     /**
      * Build N non-overlapping (home, away) team pairs from the collection.
      *
-     * @param  \Illuminate\Support\Collection<int, Team>  $teams
-     * @return \Illuminate\Support\Collection<int, array{0: Team, 1: Team}>
+     * @param  Collection<int, Team>  $teams
+     * @return Collection<int, array{0: Team, 1: Team}>
      */
     private function pairs($teams, int $count)
     {

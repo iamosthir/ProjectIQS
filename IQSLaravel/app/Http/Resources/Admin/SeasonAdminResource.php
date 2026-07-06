@@ -25,6 +25,19 @@ class SeasonAdminResource extends JsonResource
             'start_date' => $this->start_date?->toDateString(),
             'end_date' => $this->end_date?->toDateString(),
             'is_current' => $this->is_current,
+            'auto_sync' => $this->auto_sync,
+            'fixtures_synced_at' => $this->fixtures_synced_at?->toIso8601String(),
+            'standings_synced_at' => $this->standings_synced_at?->toIso8601String(),
+            'teams_synced_at' => $this->teams_synced_at?->toIso8601String(),
+            'top_scorers_synced_at' => $this->top_scorers_synced_at?->toIso8601String(),
+            'league' => $this->whenLoaded('league', fn () => [
+                'id' => $this->league->id,
+                'external_id' => $this->league->external_id,
+                'name_ar' => $this->league->name_ar,
+                'name_en' => $this->league->name_en,
+                'logo_path' => $this->league->logo_path,
+                'country_name' => $this->league->country_name,
+            ]),
         ];
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\Enums\Source;
+use Database\Factories\FixtureLineupFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,14 +11,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FixtureLineup extends Model
 {
-    /** @use HasFactory<\Database\Factories\FixtureLineupFactory> */
+    /** @use HasFactory<FixtureLineupFactory> */
     use HasFactory;
 
     /**
      * @var list<string>
      */
     protected $fillable = [
-        'fixture_id', 'team_id', 'source', 'formation',
+        'fixture_id', 'team_id', 'source', 'formation', 'colors',
         'coach_id', 'coach_name', 'coach_photo',
     ];
 
@@ -28,6 +29,7 @@ class FixtureLineup extends Model
     {
         return [
             'source' => Source::class,
+            'colors' => 'array',
         ];
     }
 

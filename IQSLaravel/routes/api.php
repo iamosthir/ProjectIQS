@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\DeviceController;
 use App\Http\Controllers\Api\V1\FanGroupController;
 use App\Http\Controllers\Api\V1\FixtureController;
+use App\Http\Controllers\Api\V1\Football;
 use App\Http\Controllers\Api\V1\LeagueController;
 use App\Http\Controllers\Api\V1\MarketplaceController;
 use App\Http\Controllers\Api\V1\MyClubController;
@@ -110,6 +111,55 @@ Route::prefix('v1')->group(function (): void {
         Route::get('teams/{team}/fixtures', [TeamController::class, 'fixtures']);
         Route::get('teams/{team}/squad', [TeamController::class, 'squad']);
         Route::get('players/{player}', [PlayerController::class, 'show']);
+    });
+
+    /*
+    |----------------------------------------------------------------------
+    | Football data — API-Football v3 mirror (query-parameter contract)
+    |----------------------------------------------------------------------
+    | Same endpoint names, filters and payload shapes as the API-Football
+    | documentation, served from our own database and wrapped in the
+    | standard {success,message,data,meta} envelope. All read-only.
+    */
+    Route::middleware(['auth:sanctum', 'throttle:60,1'])->prefix('football')->group(function (): void {
+        Route::get('countries', [Football\CountryController::class, 'index']);
+
+        Route::get('leagues', [Football\LeagueController::class, 'index']);
+        Route::get('leagues/seasons', [Football\LeagueController::class, 'seasons']);
+
+        Route::get('teams', [Football\TeamController::class, 'index']);
+        Route::get('teams/statistics', [Football\TeamController::class, 'statistics']);
+        Route::get('teams/seasons', [Football\TeamController::class, 'seasons']);
+        Route::get('teams/countries', [Football\TeamController::class, 'countries']);
+
+        Route::get('venues', [Football\VenueController::class, 'index']);
+        Route::get('standings', [Football\StandingController::class, 'index']);
+
+        Route::get('fixtures', [Football\FixtureController::class, 'index']);
+        Route::get('fixtures/rounds', [Football\FixtureController::class, 'rounds']);
+        Route::get('fixtures/headtohead', [Football\FixtureController::class, 'headToHead']);
+        Route::get('fixtures/statistics', [Football\FixtureController::class, 'statistics']);
+        Route::get('fixtures/events', [Football\FixtureController::class, 'events']);
+        Route::get('fixtures/lineups', [Football\FixtureController::class, 'lineups']);
+        Route::get('fixtures/players', [Football\FixtureController::class, 'players']);
+
+        Route::get('injuries', [Football\InjuryController::class, 'index']);
+        Route::get('predictions', [Football\PredictionController::class, 'index']);
+        Route::get('coachs', [Football\CoachController::class, 'index']);
+
+        Route::get('players', [Football\PlayerController::class, 'index']);
+        Route::get('players/seasons', [Football\PlayerController::class, 'seasons']);
+        Route::get('players/profiles', [Football\PlayerController::class, 'profiles']);
+        Route::get('players/squads', [Football\PlayerController::class, 'squads']);
+        Route::get('players/teams', [Football\PlayerController::class, 'teams']);
+        Route::get('players/topscorers', [Football\PlayerController::class, 'topScorers']);
+        Route::get('players/topassists', [Football\PlayerController::class, 'topAssists']);
+        Route::get('players/topyellowcards', [Football\PlayerController::class, 'topYellowCards']);
+        Route::get('players/topredcards', [Football\PlayerController::class, 'topRedCards']);
+
+        Route::get('transfers', [Football\TransferController::class, 'index']);
+        Route::get('trophies', [Football\TrophyController::class, 'index']);
+        Route::get('sidelined', [Football\SidelinedController::class, 'index']);
     });
 
     /*

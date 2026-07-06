@@ -3,13 +3,15 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasCanonicalSource;
+use Database\Factories\VenueFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Venue extends Model
 {
-    /** @use HasFactory<\Database\Factories\VenueFactory> */
+    /** @use HasFactory<VenueFactory> */
     use HasCanonicalSource, HasFactory;
 
     /**
@@ -17,8 +19,8 @@ class Venue extends Model
      */
     protected $fillable = [
         'source', 'external_id', 'name_ar', 'name_en', 'address', 'city',
-        'capacity', 'surface', 'image_path', 'latitude', 'longitude',
-        'external_payload', 'last_synced_at',
+        'country_id', 'country_name', 'capacity', 'surface', 'image_path',
+        'latitude', 'longitude', 'external_payload', 'last_synced_at',
     ];
 
     /**
@@ -31,6 +33,14 @@ class Venue extends Model
             'latitude' => 'decimal:7',
             'longitude' => 'decimal:7',
         ];
+    }
+
+    /**
+     * @return BelongsTo<Country, $this>
+     */
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
     }
 
     /**

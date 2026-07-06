@@ -5,14 +5,16 @@ namespace App\Models;
 use App\Models\Concerns\HasCanonicalSource;
 use App\Support\Enums\LeagueCategory;
 use App\Support\Enums\LeagueType;
+use Database\Factories\LeagueFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class League extends Model
 {
-    /** @use HasFactory<\Database\Factories\LeagueFactory> */
+    /** @use HasFactory<LeagueFactory> */
     use HasCanonicalSource, HasFactory;
 
     /**
@@ -20,7 +22,7 @@ class League extends Model
      */
     protected $fillable = [
         'source', 'external_id', 'name_ar', 'name_en', 'type', 'logo_path',
-        'country_name', 'country_code', 'country_flag', 'is_iraqi', 'category',
+        'country_id', 'country_name', 'country_code', 'country_flag', 'is_iraqi', 'category',
         'tier', 'requires_auth', 'is_featured', 'display_order', 'is_active',
         'is_locked', 'external_payload', 'last_synced_at',
     ];
@@ -38,6 +40,14 @@ class League extends Model
             'is_featured' => 'boolean',
             'is_active' => 'boolean',
         ];
+    }
+
+    /**
+     * @return BelongsTo<Country, $this>
+     */
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
     }
 
     /**

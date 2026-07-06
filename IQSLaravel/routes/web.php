@@ -4,22 +4,6 @@ use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\AppVersionController;
 use App\Http\Controllers\Admin\Auth\AuthController;
 use App\Http\Controllers\Admin\BannerController as AdminBannerController;
-use App\Http\Controllers\Admin\PageController as AdminPageController;
-use App\Http\Controllers\Admin\Matches\BroadcastController;
-use App\Http\Controllers\Admin\Matches\CommentModerationController;
-use App\Http\Controllers\Admin\Matches\EventController;
-use App\Http\Controllers\Admin\Matches\FixtureController as AdminFixtureController;
-use App\Http\Controllers\Admin\Matches\FixtureNewsController;
-use App\Http\Controllers\Admin\Matches\FixtureStatisticController;
-use App\Http\Controllers\Admin\Matches\LeagueController as AdminLeagueController;
-use App\Http\Controllers\Admin\Matches\LineupController;
-use App\Http\Controllers\Admin\Matches\PlayerController as AdminPlayerController;
-use App\Http\Controllers\Admin\Matches\PredictionOversightController;
-use App\Http\Controllers\Admin\Matches\SeasonController;
-use App\Http\Controllers\Admin\Matches\StandingController;
-use App\Http\Controllers\Admin\Matches\SyncController;
-use App\Http\Controllers\Admin\Matches\TeamController as AdminTeamController;
-use App\Http\Controllers\Admin\Matches\TopScorerController;
 use App\Http\Controllers\Admin\Clubs\ClubController as AdminClubController;
 use App\Http\Controllers\Admin\Clubs\VerificationController as ClubVerificationController;
 use App\Http\Controllers\Admin\FanGroups\FanGroupController as AdminFanGroupController;
@@ -27,8 +11,33 @@ use App\Http\Controllers\Admin\FanGroups\VerificationController as FanGroupVerif
 use App\Http\Controllers\Admin\Marketplace\CategoryController as MarketCategoryController;
 use App\Http\Controllers\Admin\Marketplace\ListingController as MarketListingController;
 use App\Http\Controllers\Admin\Marketplace\StoreController as MarketStoreController;
+use App\Http\Controllers\Admin\Matches\BroadcastController;
+use App\Http\Controllers\Admin\Matches\CoachController as AdminCoachController;
+use App\Http\Controllers\Admin\Matches\CommentModerationController;
+use App\Http\Controllers\Admin\Matches\CountryController as AdminCountryController;
+use App\Http\Controllers\Admin\Matches\EventController;
+use App\Http\Controllers\Admin\Matches\FixtureController as AdminFixtureController;
+use App\Http\Controllers\Admin\Matches\FixtureNewsController;
+use App\Http\Controllers\Admin\Matches\FixturePlayerStatisticController;
+use App\Http\Controllers\Admin\Matches\FixtureStatisticController;
+use App\Http\Controllers\Admin\Matches\ForecastController;
+use App\Http\Controllers\Admin\Matches\InjuryController as AdminInjuryController;
+use App\Http\Controllers\Admin\Matches\LeagueController as AdminLeagueController;
+use App\Http\Controllers\Admin\Matches\LineupController;
+use App\Http\Controllers\Admin\Matches\PlayerController as AdminPlayerController;
+use App\Http\Controllers\Admin\Matches\PlayerStatisticController;
+use App\Http\Controllers\Admin\Matches\PredictionOversightController;
+use App\Http\Controllers\Admin\Matches\SeasonController;
+use App\Http\Controllers\Admin\Matches\SidelinedController as AdminSidelinedController;
+use App\Http\Controllers\Admin\Matches\StandingController;
+use App\Http\Controllers\Admin\Matches\SyncController;
+use App\Http\Controllers\Admin\Matches\TeamController as AdminTeamController;
+use App\Http\Controllers\Admin\Matches\TopScorerController;
+use App\Http\Controllers\Admin\Matches\TransferController as AdminTransferController;
+use App\Http\Controllers\Admin\Matches\TrophyController as AdminTrophyController;
 use App\Http\Controllers\Admin\Matches\VenueController;
 use App\Http\Controllers\Admin\NotificationController as AdminNotificationController;
+use App\Http\Controllers\Admin\PageController as AdminPageController;
 use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\SettingController;
@@ -153,6 +162,28 @@ Route::prefix('admin/api/v1')->name('admin.api.')->group(function (): void {
             Route::post('leagues/{league}/top-scorers', [TopScorerController::class, 'store']);
             Route::put('leagues/{league}/top-scorers/{topScorer}', [TopScorerController::class, 'update']);
             Route::delete('leagues/{league}/top-scorers/{topScorer}', [TopScorerController::class, 'destroy']);
+
+            // API-Football parity entities (manual entry mirrors the doc)
+            Route::apiResource('countries', AdminCountryController::class);
+            Route::apiResource('coaches', AdminCoachController::class);
+            Route::get('coaches/{coach}/careers', [AdminCoachController::class, 'careers']);
+            Route::post('coaches/{coach}/careers', [AdminCoachController::class, 'storeCareer']);
+            Route::put('coaches/{coach}/careers/{career}', [AdminCoachController::class, 'updateCareer']);
+            Route::delete('coaches/{coach}/careers/{career}', [AdminCoachController::class, 'destroyCareer']);
+            Route::apiResource('injuries', AdminInjuryController::class);
+            Route::apiResource('transfers', AdminTransferController::class);
+            Route::apiResource('trophies', AdminTrophyController::class);
+            Route::apiResource('sidelined', AdminSidelinedController::class);
+            Route::apiResource('player-statistics', PlayerStatisticController::class);
+
+            Route::get('fixtures/{fixture}/player-statistics', [FixturePlayerStatisticController::class, 'index']);
+            Route::post('fixtures/{fixture}/player-statistics', [FixturePlayerStatisticController::class, 'store']);
+            Route::put('fixtures/{fixture}/player-statistics/{statistic}', [FixturePlayerStatisticController::class, 'update']);
+            Route::delete('fixtures/{fixture}/player-statistics/{statistic}', [FixturePlayerStatisticController::class, 'destroy']);
+
+            Route::get('fixtures/{fixture}/forecast', [ForecastController::class, 'show']);
+            Route::put('fixtures/{fixture}/forecast', [ForecastController::class, 'upsert']);
+            Route::delete('fixtures/{fixture}/forecast', [ForecastController::class, 'destroy']);
         });
 
         /*
@@ -168,6 +199,10 @@ Route::prefix('admin/api/v1')->name('admin.api.')->group(function (): void {
                 Route::post('fixtures', [SyncController::class, 'fixtures']);
                 Route::post('top-scorers', [SyncController::class, 'topScorers']);
                 Route::get('logs', [SyncController::class, 'logs']);
+
+                // Automatic sync subscriptions (seasons.auto_sync)
+                Route::get('auto', [SyncController::class, 'autoStatus']);
+                Route::post('auto/seasons/{season}', [SyncController::class, 'toggleAuto']);
             });
             Route::post('fixtures/{fixture}/sync-details', [SyncController::class, 'fixtureDetails']);
         });

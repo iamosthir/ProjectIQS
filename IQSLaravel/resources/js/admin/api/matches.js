@@ -81,6 +81,10 @@ export const matchesApi = {
     syncFixtureDetails: (fixtureId) => client.post(`/fixtures/${fixtureId}/sync-details`),
     syncLogs: (params = {}) => client.get('/sync/logs', { params }),
 
+    // Auto-sync subscriptions (seasons.auto_sync)
+    syncAutoStatus: () => client.get('/sync/auto'),
+    toggleSeasonAutoSync: (seasonId, p) => client.post(`/sync/auto/seasons/${seasonId}`, p),
+
     // Comment moderation
     comments: (params = {}) => client.get('/comments', { params }),
     hideComment: (id) => client.post(`/comments/${id}/hide`),
