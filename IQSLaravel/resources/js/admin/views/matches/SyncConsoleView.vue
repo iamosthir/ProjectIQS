@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useToast } from 'primevue/usetoast';
 import PageHeader from '@admin/components/PageHeader.vue';
@@ -8,12 +8,22 @@ import { matchesApi } from '@admin/api/matches';
 const { t } = useI18n();
 const toast = useToast();
 
-const iraqiOnly = ref(true);
+const ALL_COUNTRIES = '__all__';
+const countryScope = ref('Iraq');
+const countries = ref([]);
 const league = ref(null);
 const season = ref(2025);
 const busy = ref('');
 const logs = ref([]);
 const loadingLogs = ref(false);
+
+const countryScopeOptions = computed(() => [
+    { label: t('matches.iraqiOnly'), value: 'Iraq' },
+    { label: t('matches.allCountries'), value: ALL_COUNTRIES },
+    ...countries.value
+        .filter((c) => c.name_en !== 'Iraq')
+        .map((c) => ({ label: c.name_ar && c.name_ar !== c.name_en ? `${c.name_ar} — ${c.name_en}` : c.name_en, value: c.name_en })),
+]);
 
 const auto = ref({ seasons: [], budget_remaining: null, live_poll_seconds: 30 });
 const loadingAuto = ref(false);
@@ -49,6 +59,21 @@ async function loadAuto() {
     catch (e) { toastErr(e); } finally { loadingAuto.value = false; }
 }
 
+async function loadCountries() {
+    try { const { data } = await matchesApi.syncCountryOptions(); countries.value = data.data; }
+    catch { /* picker still offers Iraq / all-countries */ }
+}
+
+async function refreshCountries() {
+    await run('countries', () => matchesApi.syncCountries());
+    await loadCountries();
+}
+
+function runLeaguesSync() {
+    const params = countryScope.value === ALL_COUNTRIES ? {} : { country: countryScope.value };
+    return run('leagues', () => matchesApi.syncLeagues(params));
+}
+
 async function loadApiLeagues(search = '') {
     try {
         const params = { 'filter[source]': 'api_football', per_page: 50, sort: 'name_en' };
@@ -77,9 +102,21 @@ async function toggleAuto(seasonId, enabled) {
     finally { togglingAuto.value = false; }
 }
 
+async function runSeasonNow(row) {
+    togglingAuto.value = true;
+    try {
+        const { data } = await matchesApi.runSeasonAutoSync(row.id);
+        toast.add({ severity: 'success', summary: t('matches.syncNow'), detail: t('matches.processed', { n: data?.data?.processed ?? 0 }), life: 4000 });
+    } catch (e) { toastErr(e); }
+    finally {
+        togglingAuto.value = false;
+        await Promise.all([loadAuto(), loadLogs()]);
+    }
+}
+
 function fmtTime(v) { return v ? new Date(v).toLocaleString() : '—'; }
 
-onMounted(() => { loadLogs(); loadAuto(); loadApiLeagues(); });
+onMounted(() => { loadLogs(); loadAuto(); loadApiLeagues(); loadCountries(); });
 </script>
 
 <template>
@@ -90,8 +127,15 @@ onMounted(() => { loadLogs(); loadAuto(); loadApiLeagues(); });
             <!-- Leagues -->
             <div class="rounded-2xl border border-surface-200 bg-surface-0 p-4 dark:border-surface-800 dark:bg-surface-900">
                 <h3 class="mb-3 font-semibold">{{ t('matches.syncLeagues') }}</h3>
-                <label class="mb-3 flex items-center gap-2 text-sm"><ToggleSwitch v-model="iraqiOnly" /> {{ t('matches.iraqiOnly') }}</label>
-                <Button :label="t('matches.runSync')" icon="pi pi-play" :loading="busy === 'leagues'" @click="run('leagues', () => matchesApi.syncLeagues({ iraqi: iraqiOnly }))" />
+                <div class="mb-2">
+                    <label class="mb-1 block text-xs text-surface-500">{{ t('matches.countryScope') }}</label>
+                    <div class="flex items-center gap-2">
+                        <Select v-model="countryScope" :options="countryScopeOptions" option-label="label" option-value="value" filter class="w-full" />
+                        <Button v-tooltip.bottom="t('matches.refreshCountries')" icon="pi pi-globe" outlined severity="secondary" :loading="busy === 'countries'" @click="refreshCountries" />
+                    </div>
+                </div>
+                <p v-if="countryScope !== 'Iraq'" class="mb-3 text-xs text-surface-500">{{ t('matches.inactiveImportHint') }}</p>
+                <Button :label="t('matches.runSync')" icon="pi pi-play" :loading="busy === 'leagues'" @click="runLeaguesSync" />
             </div>
 
             <!-- Per-league syncs -->
@@ -168,9 +212,20 @@ onMounted(() => { loadLogs(); loadAuto(); loadApiLeagues(); });
                 <Column :header="t('matches.lastScorersSync')">
                     <template #body="{ data }"><span dir="ltr">{{ fmtTime(data.top_scorers_synced_at) }}</span></template>
                 </Column>
+                <Column :header="t('matches.detailsProgress')">
+                    <template #body="{ data }">
+                        <Tag
+                            dir="ltr"
+                            :value="`${data.detailed_fixtures_count ?? 0}/${data.fixtures_count ?? 0}`"
+                            :severity="(data.fixtures_count ?? 0) > 0 && data.detailed_fixtures_count === data.fixtures_count ? 'success' : 'secondary'" />
+                    </template>
+                </Column>
                 <Column>
                     <template #body="{ data }">
-                        <Button :label="t('matches.disableAutoSync')" icon="pi pi-pause" size="small" severity="danger" outlined :loading="togglingAuto" @click="toggleAuto(data.id, false)" />
+                        <div class="flex items-center gap-2">
+                            <Button v-tooltip.bottom="t('matches.syncNow')" icon="pi pi-play" size="small" outlined :loading="togglingAuto" @click="runSeasonNow(data)" />
+                            <Button :label="t('matches.disableAutoSync')" icon="pi pi-pause" size="small" severity="danger" outlined :loading="togglingAuto" @click="toggleAuto(data.id, false)" />
+                        </div>
                     </template>
                 </Column>
             </DataTable>

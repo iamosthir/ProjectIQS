@@ -68,13 +68,15 @@ class SyncLiveCommand extends Command
     }
 
     /**
-     * Whether any API-sourced fixture is currently live or kicking off
-     * around now (3h back covers extra time + penalties on delayed status).
+     * Whether any API-sourced fixture of an ACTIVE league is currently live
+     * or kicking off around now (3h back covers extra time + penalties on
+     * delayed status). Inactive leagues never open the window.
      */
     protected function liveWindowOpen(): bool
     {
         return Fixture::query()
             ->apiFootball()
+            ->whereHas('league', fn ($q) => $q->where('is_active', true))
             ->where(fn ($q) => $q
                 ->where('status_group', 'live')
                 ->orWhere(fn ($w) => $w

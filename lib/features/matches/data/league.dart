@@ -4,15 +4,20 @@ import 'package:flutter/foundation.dart';
 /// the `?season=` query value — NOT the season id.
 @immutable
 class Season {
-  const Season({required this.id, this.year, this.label});
+  const Season({required this.id, this.year, this.label, this.isCurrent = false});
   final int id;
   final int? year;
   final String? label;
+  final bool isCurrent;
+
+  /// Display label — the API `label` when set, else the plain year.
+  String get displayLabel => label ?? (year?.toString() ?? '');
 
   factory Season.fromJson(Map<String, dynamic> j) => Season(
         id: (j['id'] as num).toInt(),
         year: (j['year'] as num?)?.toInt(),
         label: j['label'] as String?,
+        isCurrent: j['is_current'] == true,
       );
 }
 
@@ -29,6 +34,7 @@ class League {
     this.requiresAuth = false,
     this.isFeatured = false,
     this.currentSeason,
+    this.seasons = const [],
   });
 
   final int id;
@@ -41,6 +47,10 @@ class League {
   final bool requiresAuth;
   final bool isFeatured;
   final Season? currentSeason;
+
+  /// All seasons, newest first (populated by the league-detail payload only;
+  /// list rows leave it empty).
+  final List<Season> seasons;
 
   factory League.fromJson(Map<String, dynamic> j) => League(
         id: (j['id'] as num).toInt(),
@@ -55,5 +65,11 @@ class League {
         currentSeason: j['current_season'] is Map
             ? Season.fromJson((j['current_season'] as Map).cast<String, dynamic>())
             : null,
+        seasons: j['seasons'] is List
+            ? (j['seasons'] as List)
+                .whereType<Map>()
+                .map((e) => Season.fromJson(e.cast<String, dynamic>()))
+                .toList()
+            : const [],
       );
 }

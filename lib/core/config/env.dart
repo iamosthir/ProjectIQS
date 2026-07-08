@@ -42,7 +42,7 @@ class Env {
   /// Default host per flavor. `dev` is the local LAN server; staging/prod point
   /// at the live domain (set a distinct staging host here if one exists).
   static String get _defaultHost => switch (flavor) {
-        Flavor.dev => 'http://192.168.0.188:8000',
+        Flavor.dev => 'http://10.72.86.247:8000',
         Flavor.staging => 'https://apifootball.teknoiq.com',
         Flavor.prod => 'https://apifootball.teknoiq.com',
       };

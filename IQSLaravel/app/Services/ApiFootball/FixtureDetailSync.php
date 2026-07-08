@@ -29,13 +29,20 @@ class FixtureDetailSync extends FootballSync
         $rows = $this->client->get('fixtures', ['id' => $fixture->external_id]);
         $row = $rows[0] ?? null;
 
-        if ($row === null) {
-            return; // unknown id / empty response — never wipe existing detail
+        if ($row !== null) {
+            $this->applyEvents($fixture, $row['events'] ?? []);
+            $this->applyLineups($fixture, $row['lineups'] ?? []);
+            $this->applyStatistics($fixture, $row['statistics'] ?? []);
         }
+        // $row === null: unknown id / empty response — never wipe existing
+        // detail, but a finished fixture still gets stamped below so the
+        // backfill doesn't re-request data the provider will never have.
 
-        $this->applyEvents($fixture, $row['events'] ?? []);
-        $this->applyLineups($fixture, $row['lineups'] ?? []);
-        $this->applyStatistics($fixture, $row['statistics'] ?? []);
+        // Stamp only once the match is over: pre-match/in-play pulls are
+        // partial by nature, and the finished-state pull is the final one.
+        if ($fixture->status_group?->value === 'finished') {
+            $fixture->forceFill(['details_synced_at' => now()])->save();
+        }
     }
 
     /**

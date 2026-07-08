@@ -94,9 +94,12 @@ final standingsProvider =
       ref.watch(matchesRepositoryProvider).standings(key.$1, season: key.$2),
 );
 
+/// Key: (leagueId, season-year). `season` null → all league fixtures.
 final leagueFixturesProvider =
-    FutureProvider.family<List<Fixture>, int>((ref, leagueId) async {
-  final page = await ref.watch(matchesRepositoryProvider).leagueFixtures(leagueId);
+    FutureProvider.family<List<Fixture>, (int, int?)>((ref, key) async {
+  final page = await ref
+      .watch(matchesRepositoryProvider)
+      .leagueFixtures(key.$1, season: key.$2);
   return page.items;
 });
 

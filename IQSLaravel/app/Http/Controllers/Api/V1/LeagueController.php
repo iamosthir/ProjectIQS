@@ -23,6 +23,7 @@ class LeagueController extends Controller
             ->where('is_active', true)
             ->when($request->filled('is_iraqi'), fn ($q) => $q->where('is_iraqi', $request->boolean('is_iraqi')))
             ->with('currentSeason')
+            ->orderByDesc('is_featured')
             ->orderBy('tier')
             ->orderBy('display_order')
             ->get();
@@ -32,7 +33,10 @@ class LeagueController extends Controller
 
     public function show(League $league): JsonResponse
     {
-        return $this->ok(new LeagueResource($league->load('currentSeason')));
+        return $this->ok(new LeagueResource($league->load([
+            'currentSeason',
+            'seasons' => fn ($q) => $q->orderByDesc('year'),
+        ])));
     }
 
     public function standings(Request $request, League $league): JsonResponse
@@ -54,6 +58,16 @@ class LeagueController extends Controller
     {
         $fixtures = Fixture::query()
             ->where('league_id', $league->id)
+            ->when($request->filled('season'), function ($q) use ($request, $league): void {
+                // `?season` is the season YEAR; an unknown year yields an
+                // empty list rather than silently returning all seasons.
+                $seasonId = Season::query()
+                    ->where('league_id', $league->id)
+                    ->where('year', $request->integer('season'))
+                    ->value('id');
+
+                $q->where('season_id', $seasonId ?? -1);
+            })
             ->when($request->filled('status_group'), fn ($q) => $q->where('status_group', $request->string('status_group')))
             ->when($request->filled('date'), fn ($q) => $q->whereDate('match_datetime', $request->date('date')))
             ->when($request->filled('round'), fn ($q) => $q->where('round', $request->string('round')))

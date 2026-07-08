@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:iqs_flutter/features/matches/application/matches_providers.dart';
+import 'package:iqs_flutter/features/matches/data/league.dart';
 import 'package:iqs_flutter/shared/l10n/l10n_ext.dart';
 import 'package:iqs_flutter/shared/widgets/app_chip.dart';
 import 'package:iqs_flutter/shared/widgets/app_states.dart';
@@ -15,7 +16,9 @@ import 'match_widgets.dart';
 import 'standings_table.dart';
 
 /// League detail (`/leagues/:id`) — tabs: الترتيب (standings), المباريات
-/// (fixtures), الهدافون (top scorers). `?season` omitted → current season.
+/// (fixtures), الهدافون (top scorers). A season pill under the tab bar (shown
+/// when the league has 2+ seasons) switches all three tabs to that season;
+/// unselected → the backend's current-season default.
 class LeagueDetailScreen extends ConsumerStatefulWidget {
   const LeagueDetailScreen({super.key, required this.leagueId});
 
@@ -28,6 +31,9 @@ class LeagueDetailScreen extends ConsumerStatefulWidget {
 class _LeagueDetailScreenState extends ConsumerState<LeagueDetailScreen> {
   int _tab = 0;
 
+  /// Selected season YEAR; null → current season (backend default).
+  int? _seasonYear;
+
   List<String> _tabLabels(BuildContext context) => [
         context.l10n.matchesNavTabStandings,
         context.l10n.navMatches,
@@ -37,8 +43,8 @@ class _LeagueDetailScreenState extends ConsumerState<LeagueDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final id = widget.leagueId;
-    final title = ref.watch(leagueDetailProvider(id)).valueOrNull?.name ??
-        context.l10n.matchesNavLeagueTitle;
+    final league = ref.watch(leagueDetailProvider(id)).valueOrNull;
+    final title = league?.name ?? context.l10n.matchesNavLeagueTitle;
     return Scaffold(
       backgroundColor: AppColors.screenBg,
       body: Column(
@@ -51,6 +57,10 @@ class _LeagueDetailScreenState extends ConsumerState<LeagueDetailScreen> {
                 DetailHeaderRow(title: title, fallbackRoute: '/leagues'),
                 const SizedBox(height: 12),
                 _tabBar(),
+                if (league != null && league.seasons.length > 1) ...[
+                  const SizedBox(height: 10),
+                  _seasonPill(league),
+                ],
               ],
             ),
           ),
@@ -58,6 +68,137 @@ class _LeagueDetailScreenState extends ConsumerState<LeagueDetailScreen> {
         ],
       ),
     );
+  }
+
+  // ------------------------------------------------------------ season picker
+  Season? _selectedSeason(League league) {
+    if (_seasonYear != null) {
+      for (final s in league.seasons) {
+        if (s.year == _seasonYear) return s;
+      }
+    }
+    return league.currentSeason ??
+        (league.seasons.isEmpty ? null : league.seasons.first);
+  }
+
+  Widget _seasonPill(League league) {
+    final selected = _selectedSeason(league);
+    final label = selected?.displayLabel ?? context.l10n.matchesNavSeason;
+    return GestureDetector(
+      onTap: () => _pickSeason(league),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        decoration: Clay.card(radius: 14, gradient: AppColors.surface),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.calendar_month_rounded,
+                size: 16, color: AppColors.primaryGreen),
+            const SizedBox(width: 8),
+            Text(
+              '${context.l10n.matchesNavSeason} $label',
+              textDirection: TextDirection.ltr,
+              style: AppText.tajawal(
+                size: 13,
+                weight: AppText.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more_rounded,
+                size: 18, color: AppColors.chevron),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickSeason(League league) async {
+    final selected = _selectedSeason(league);
+    final picked = await showModalBottomSheet<Season>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final media = MediaQuery.of(sheetContext);
+        return Container(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.7),
+          decoration: const BoxDecoration(
+            color: AppColors.screenBgWhite,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: AppColors.divider,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(sheetContext.l10n.matchesNavSelectSeason,
+                  style: AppText.sectionHeader),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: league.seasons.length,
+                  separatorBuilder: (_, _) =>
+                      const Divider(color: AppColors.divider, height: 1),
+                  itemBuilder: (context, i) {
+                    final s = league.seasons[i];
+                    final active = s.id == selected?.id;
+                    return ListTile(
+                      title: Text(
+                        s.displayLabel,
+                        textDirection: TextDirection.ltr,
+                        textAlign: TextAlign.start,
+                        style: AppText.tajawal(
+                          size: 15,
+                          weight: active ? AppText.extraBold : AppText.bold,
+                          color: active
+                              ? AppColors.primaryGreen
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      trailing: s.isCurrent
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 4, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: AppColors.pillBg,
+                                borderRadius: BorderRadius.circular(11),
+                              ),
+                              child: Text(
+                                context.l10n.matchesNavCurrentSeason,
+                                style: AppText.tajawal(
+                                  size: 12,
+                                  weight: AppText.bold,
+                                  color: AppColors.pillText,
+                                ),
+                              ),
+                            )
+                          : (active
+                              ? const Icon(Icons.check_rounded,
+                                  size: 20, color: AppColors.primaryGreen)
+                              : null),
+                      onTap: () => Navigator.of(context).pop(s),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked != null && picked.year != null && mounted) {
+      setState(() => _seasonYear = picked.year);
+    }
   }
 
   Widget _tabBar() {
@@ -96,15 +237,16 @@ class _LeagueDetailScreenState extends ConsumerState<LeagueDetailScreen> {
 
   // ----------------------------------------------------------- standings tab
   Widget _standingsTab(int id) {
-    final async = ref.watch(standingsProvider((id, null)));
+    final key = (id, _seasonYear);
+    final async = ref.watch(standingsProvider(key));
     return AsyncValueView(
       value: async,
-      onRetry: () => ref.invalidate(standingsProvider((id, null))),
+      onRetry: () => ref.invalidate(standingsProvider(key)),
       data: (rows) {
         if (rows.isEmpty) return EmptyState(title: context.l10n.matchesNavNoStandings);
         return RefreshIndicator(
           color: AppColors.primaryGreen,
-          onRefresh: () async => ref.invalidate(standingsProvider((id, null))),
+          onRefresh: () async => ref.invalidate(standingsProvider(key)),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
@@ -117,15 +259,16 @@ class _LeagueDetailScreenState extends ConsumerState<LeagueDetailScreen> {
 
   // ------------------------------------------------------------- fixtures tab
   Widget _fixturesTab(int id) {
-    final async = ref.watch(leagueFixturesProvider(id));
+    final key = (id, _seasonYear);
+    final async = ref.watch(leagueFixturesProvider(key));
     return AsyncValueView(
       value: async,
-      onRetry: () => ref.invalidate(leagueFixturesProvider(id)),
+      onRetry: () => ref.invalidate(leagueFixturesProvider(key)),
       data: (fixtures) {
         if (fixtures.isEmpty) return EmptyState(title: context.l10n.matchesNavNoMatches);
         return RefreshIndicator(
           color: AppColors.primaryGreen,
-          onRefresh: () async => ref.invalidate(leagueFixturesProvider(id)),
+          onRefresh: () async => ref.invalidate(leagueFixturesProvider(key)),
           child: ListView.separated(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
@@ -140,10 +283,11 @@ class _LeagueDetailScreenState extends ConsumerState<LeagueDetailScreen> {
 
   // -------------------------------------------------------------- scorers tab
   Widget _scorersTab(int id) {
-    final async = ref.watch(topScorersProvider((id, null)));
+    final key = (id, _seasonYear);
+    final async = ref.watch(topScorersProvider(key));
     return AsyncValueView(
       value: async,
-      onRetry: () => ref.invalidate(topScorersProvider((id, null))),
+      onRetry: () => ref.invalidate(topScorersProvider(key)),
       data: (scorers) {
         if (scorers.isEmpty) return EmptyState(title: context.l10n.matchesNavNoScorers);
         return ListView.separated(

@@ -11,18 +11,24 @@ use App\Support\Enums\Source;
 class LeagueSync extends FootballSync
 {
     /**
-     * Sync leagues (+ their seasons). Pass $iraqiOnly to fetch only Iraq.
+     * Sync leagues (+ their seasons). Pass a country name exactly as
+     * API-Football spells it ("Iraq", "England", "World" for international
+     * competitions…) to fetch only that country's leagues; null → all.
+     *
+     * Non-Iraqi leagues are CREATED INACTIVE so the app stays clean until an
+     * admin activates the few they want (Leagues page, or automatically when
+     * a season is subscribed to auto-sync). Re-syncs never flip `is_active`.
      *
      * @return int number of leagues processed
      */
-    public function sync(bool $iraqiOnly = false): int
+    public function sync(?string $country = null): int
     {
-        $rows = $this->client->get('leagues', $iraqiOnly ? ['country' => 'Iraq'] : []);
+        $rows = $this->client->get('leagues', $country !== null ? ['country' => $country] : []);
         $count = 0;
 
         foreach ($rows as $row) {
             $league = $row['league'] ?? [];
-            $country = $row['country'] ?? [];
+            $countryRow = $row['country'] ?? [];
             $id = (int) ($league['id'] ?? 0);
 
             if ($id === 0) {
@@ -30,18 +36,19 @@ class LeagueSync extends FootballSync
             }
 
             $nameEn = (string) ($league['name'] ?? '');
+            $isIraqi = strtolower((string) ($countryRow['name'] ?? '')) === 'iraq';
 
             $model = $this->upsert(League::class, $id, [
                 'name_en' => $nameEn,
                 'type' => ($league['type'] ?? '') === 'Cup' ? LeagueType::Cup->value : LeagueType::League->value,
                 'logo_path' => $league['logo'] ?? null,
-                'country_name' => $country['name'] ?? null,
-                'country_code' => $country['code'] ?? null,
-                'country_flag' => $country['flag'] ?? null,
-                'is_iraqi' => strtolower((string) ($country['name'] ?? '')) === 'iraq',
+                'country_name' => $countryRow['name'] ?? null,
+                'country_code' => $countryRow['code'] ?? null,
+                'country_flag' => $countryRow['flag'] ?? null,
+                'is_iraqi' => $isIraqi,
                 'category' => LeagueCategory::Other->value,
                 'external_payload' => $row,
-            ], ['name_ar' => $nameEn]);
+            ], ['name_ar' => $nameEn, 'is_active' => $isIraqi]);
 
             if ($model instanceof League) {
                 $this->syncSeasons($model, $row['seasons'] ?? []);

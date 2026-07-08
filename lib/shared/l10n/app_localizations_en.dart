@@ -483,6 +483,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get matchesNavAllMatches => 'All matches';
 
   @override
+  String get matchesNavAllLeagues => 'All leagues';
+
+  @override
+  String get matchesNavSeason => 'Season';
+
+  @override
+  String get matchesNavSelectSeason => 'Select season';
+
+  @override
+  String get matchesNavCurrentSeason => 'Current';
+
+  @override
   String get matchesNavNoMatches => 'No matches';
 
   @override

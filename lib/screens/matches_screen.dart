@@ -6,8 +6,10 @@ import '../core/util/asset_url.dart';
 import '../core/util/date_fmt.dart';
 import '../features/matches/application/matches_providers.dart';
 import '../features/matches/data/fixture.dart';
+import '../features/matches/presentation/match_widgets.dart';
 import '../features/notifications/application/notifications_providers.dart';
 import '../shared/l10n/l10n_ext.dart';
+import '../shared/widgets/app_chip.dart';
 import '../shared/widgets/app_states.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -36,6 +38,10 @@ class MatchesScreen extends ConsumerStatefulWidget {
 
 class _MatchesScreenState extends ConsumerState<MatchesScreen> {
   int _filter = 0;
+
+  /// Optional league narrowing (the chips row under the header); null → all
+  /// leagues, and the feed groups fixtures under per-league headers.
+  int? _leagueFilter;
 
   List<String> _filterLabels(BuildContext context) => [
         context.l10n.matchesNavFilterAll,
@@ -70,6 +76,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
         color: AppColors.primaryGreen,
         onRefresh: () async {
           ref.invalidate(fixturesProvider);
+          ref.invalidate(leaguesProvider);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -77,6 +84,7 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildHeader(),
+              _buildLeagueChips(),
               ..._buildSections(),
               const SizedBox(height: 16),
             ],
@@ -192,6 +200,39 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
     );
   }
 
+  // ------------------------------------------------------- league filter row
+  /// Horizontally scrollable league chips (كل البطولات + one per active
+  /// league, featured leagues first — the API's ordering). Hidden until the
+  /// leagues list loads; selecting a chip narrows every section's query.
+  Widget _buildLeagueChips() {
+    final leagues = ref.watch(leaguesProvider(null)).valueOrNull;
+    if (leagues == null || leagues.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 0),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            AppChip(
+              label: context.l10n.matchesNavAllLeagues,
+              active: _leagueFilter == null,
+              onTap: () => setState(() => _leagueFilter = null),
+            ),
+            for (final league in leagues) ...[
+              const SizedBox(width: 8),
+              AppChip(
+                label: league.name,
+                active: _leagueFilter == league.id,
+                onTap: () => setState(() => _leagueFilter =
+                    _leagueFilter == league.id ? null : league.id),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------- sections
   /// Builds the section list according to the active filter (mirrors the
   /// original structure: الكل → اليوم + غداً sections).
@@ -201,27 +242,32 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
     final nowUtc = DateTime.now().toUtc();
     final today = _ymd(nowUtc);
     final tomorrow = _ymd(nowUtc.add(const Duration(days: 1)));
+    final league = _leagueFilter;
     switch (_filter) {
       case 1:
         return [
-          _section(context.l10n.matchesNavFilterToday, FixturesQuery(date: today))
+          _section(context.l10n.matchesNavFilterToday,
+              FixturesQuery(date: today, league: league))
         ];
       case 2:
         return [
           _section(context.l10n.matchesNavFilterTomorrow,
-              FixturesQuery(date: tomorrow))
+              FixturesQuery(date: tomorrow, league: league))
         ];
       case 3:
         return [
           _section(context.l10n.matchesNavFilterEnded,
-              const FixturesQuery(statusGroup: 'finished'))
+              FixturesQuery(statusGroup: 'finished', league: league))
         ];
       case 0:
       default:
         // "All" = the full fixtures feed in one section (the original showed
         // today+tomorrow, but that mapping leaves the tab empty whenever no
         // match is scheduled for those exact dates).
-        return [_section(context.l10n.matchesNavAllMatches, const FixturesQuery())];
+        return [
+          _section(context.l10n.matchesNavAllMatches,
+              FixturesQuery(league: league))
+        ];
     }
   }
 
@@ -260,11 +306,17 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
                   child: EmptyState(title: context.l10n.matchesNavNoMatches),
                 );
               }
+              final groups = _groupByLeague(page.items);
               return Column(
                 children: [
-                  for (int i = 0; i < page.items.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 16),
-                    _buildMatchCard(page.items[i]),
+                  for (int g = 0; g < groups.length; g++) ...[
+                    if (g > 0) const SizedBox(height: 20),
+                    _leagueGroupHeader(groups[g].$1),
+                    const SizedBox(height: 10),
+                    for (int i = 0; i < groups[g].$2.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 16),
+                      _buildMatchCard(groups[g].$2[i]),
+                    ],
                   ],
                 ],
               );
@@ -272,6 +324,65 @@ class _MatchesScreenState extends ConsumerState<MatchesScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // -------------------------------------------------------- league grouping
+  /// Groups fixtures by league, ordered like the leagues list (featured
+  /// first) when it is loaded; unknown leagues keep first-appearance order
+  /// after them. Fixtures inside a group keep the API's datetime order.
+  List<(FixtureLeagueRef, List<Fixture>)> _groupByLeague(List<Fixture> items) {
+    final groups = <int, (FixtureLeagueRef, List<Fixture>)>{};
+    for (final f in items) {
+      groups.putIfAbsent(f.league.id, () => (f.league, <Fixture>[])).$2.add(f);
+    }
+
+    final leagues = ref.read(leaguesProvider(null)).valueOrNull;
+    final order = <int, int>{
+      if (leagues != null)
+        for (int i = 0; i < leagues.length; i++) leagues[i].id: i,
+    };
+    final appearance = <int, int>{};
+    for (final id in groups.keys) {
+      appearance[id] = appearance.length;
+    }
+
+    final sorted = groups.values.toList()
+      ..sort((a, b) {
+        final ai = order[a.$1.id] ?? (1 << 20) + appearance[a.$1.id]!;
+        final bi = order[b.$1.id] ?? (1 << 20) + appearance[b.$1.id]!;
+        return ai.compareTo(bi);
+      });
+    return sorted;
+  }
+
+  /// Tappable league header above each group (crest + name → league page).
+  Widget _leagueGroupHeader(FixtureLeagueRef league) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => context.push('/leagues/${league.id}'),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Row(
+          children: [
+            TeamCrest(teamId: league.id, logo: league.logo, size: 30, iconSize: 15),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                league.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.tajawal(
+                  size: 15,
+                  weight: AppText.extraBold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_left, size: 20, color: AppColors.chevron),
+          ],
+        ),
+      ),
     );
   }
 

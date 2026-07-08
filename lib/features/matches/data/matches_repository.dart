@@ -74,12 +74,20 @@ class MatchesRepository {
             .toList(),
       );
 
-  Future<Paginated<Fixture>> leagueFixtures(int leagueId, {int page = 1}) =>
-      _api.getPaged(
-        '/leagues/$leagueId/fixtures',
-        query: {'page': page, 'per_page': 50},
-        parseItem: Fixture.fromJson,
-      );
+  /// `?season` is the season YEAR (e.g. 2025); omit for all league fixtures.
+  Future<Paginated<Fixture>> leagueFixtures(
+    int leagueId, {
+    int page = 1,
+    int? season,
+  }) {
+    final query = <String, dynamic>{'page': page, 'per_page': 50};
+    if (season != null) query['season'] = season;
+    return _api.getPaged(
+      '/leagues/$leagueId/fixtures',
+      query: query,
+      parseItem: Fixture.fromJson,
+    );
+  }
 
   Future<List<TopScorer>> topScorers(int leagueId, {int? season}) => _api.get(
         '/leagues/$leagueId/top-scorers',

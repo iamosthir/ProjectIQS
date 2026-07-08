@@ -34,6 +34,7 @@ class Fixture extends Model
         'likes_count', 'comments_count', 'shares_count', 'predictions_count',
         'predict_home_count', 'predict_draw_count', 'predict_away_count',
         'predictions_settled', 'is_locked', 'external_payload', 'last_synced_at',
+        'details_synced_at',
     ];
 
     /**
@@ -45,6 +46,7 @@ class Fixture extends Model
             'match_datetime' => 'datetime',
             'period_first_at' => 'datetime',
             'period_second_at' => 'datetime',
+            'details_synced_at' => 'datetime',
             'status_group' => FixtureStatusGroup::class,
             'winner' => MatchWinner::class,
             'elapsed' => 'integer',

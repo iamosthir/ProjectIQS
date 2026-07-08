@@ -479,6 +479,18 @@ class AppLocalizationsAr extends AppLocalizations {
   String get matchesNavAllMatches => 'كل المباريات';
 
   @override
+  String get matchesNavAllLeagues => 'كل البطولات';
+
+  @override
+  String get matchesNavSeason => 'الموسم';
+
+  @override
+  String get matchesNavSelectSeason => 'اختر الموسم';
+
+  @override
+  String get matchesNavCurrentSeason => 'الحالي';
+
+  @override
   String get matchesNavNoMatches => 'لا توجد مباريات';
 
   @override

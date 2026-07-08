@@ -16,12 +16,13 @@ class SyncAutoCommand extends Command
         $summary = $sync->run();
 
         $this->info(sprintf(
-            'Auto sync: %d fixtures, %d standings, %d teams, %d top scorers, %d lineups.',
+            'Auto sync: %d fixtures, %d standings, %d teams, %d top scorers, %d lineups, %d details backfilled.',
             $summary['fixtures'],
             $summary['standings'],
             $summary['teams'],
             $summary['top_scorers'],
             $summary['lineups'],
+            $summary['details'],
         ));
 
         foreach ($summary['errors'] as $error) {

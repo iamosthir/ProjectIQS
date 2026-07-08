@@ -19,7 +19,7 @@ class AutoSyncTest extends TestCase
     /**
      * @return array<string, mixed>
      */
-    private function fixtureRow(int $id = 1001, string $status = 'NS', ?int $elapsed = null, ?string $date = null): array
+    private function fixtureRow(int $id = 1001, string $status = 'NS', ?int $elapsed = null, ?string $date = null, int $league = 39): array
     {
         return [
             'fixture' => [
@@ -30,7 +30,7 @@ class AutoSyncTest extends TestCase
                 'venue' => ['id' => 555, 'name' => 'People Stadium', 'city' => 'Baghdad'],
                 'status' => ['long' => 'Not Started', 'short' => $status, 'elapsed' => $elapsed],
             ],
-            'league' => ['id' => 39, 'season' => 2025, 'round' => 'Round 1'],
+            'league' => ['id' => $league, 'season' => 2025, 'round' => 'Round 1'],
             'teams' => [
                 'home' => ['id' => 10, 'name' => 'Home FC', 'logo' => null, 'winner' => null],
                 'away' => ['id' => 20, 'name' => 'Away FC', 'logo' => null, 'winner' => null],
@@ -144,6 +144,69 @@ class AutoSyncTest extends TestCase
         $this->artisan('sync:live')->assertSuccessful();
 
         Http::assertNothingSent();
+    }
+
+    public function test_auto_sync_backfills_details_for_finished_fixtures_once(): void
+    {
+        ['season' => $season] = $this->subscribe();
+        $home = Team::factory()->create(['source' => Source::ApiFootball, 'external_id' => 10]);
+        $away = Team::factory()->create(['source' => Source::ApiFootball, 'external_id' => 20]);
+
+        $fixture = Fixture::create([
+            'source' => Source::ApiFootball,
+            'external_id' => 1001,
+            'league_id' => $season->league_id,
+            'season_id' => $season->id,
+            'home_team_id' => $home->id,
+            'away_team_id' => $away->id,
+            'match_datetime' => now()->subDays(3),
+            'status_short' => 'FT',
+            'status_group' => 'finished',
+        ]);
+
+        // Fresh watermarks → no tier requests; only the backfill runs.
+        $season->forceFill([
+            'fixtures_synced_at' => now(), 'standings_synced_at' => now(),
+            'teams_synced_at' => now(), 'top_scorers_synced_at' => now(),
+        ])->save();
+
+        $detailRow = $this->fixtureRow(status: 'FT', date: now()->subDays(3)->toIso8601String()) + [
+            'events' => [[
+                'time' => ['elapsed' => 40, 'extra' => null],
+                'team' => ['id' => 10, 'name' => 'Home FC'],
+                'player' => ['id' => 77, 'name' => 'Star Striker'],
+                'assist' => ['id' => null, 'name' => null],
+                'type' => 'Goal',
+                'detail' => 'Normal Goal',
+            ]],
+            'lineups' => [],
+            'statistics' => [],
+        ];
+        Http::fake(['*' => Http::response(['response' => [$detailRow]])]);
+
+        $this->artisan('sync:auto')->assertSuccessful();
+
+        $fixture->refresh();
+        $this->assertNotNull($fixture->details_synced_at);
+        $this->assertTrue($fixture->has_events);
+        $this->assertDatabaseHas('fixture_events', ['fixture_id' => $fixture->id, 'elapsed' => 40]);
+
+        // Second tick: the stamp prevents any re-request.
+        $this->artisan('sync:auto')->assertSuccessful();
+        $this->assertCount(1, Http::recorded());
+    }
+
+    public function test_live_sync_ignores_fixtures_of_inactive_leagues(): void
+    {
+        League::factory()->apiFootball(40)->create(['is_active' => false]);
+
+        Http::fake(['*' => Http::response(['response' => [
+            $this->fixtureRow(status: '1H', elapsed: 20, league: 40),
+        ]])]);
+
+        $this->artisan('sync:live', ['--force' => true])->assertSuccessful();
+
+        $this->assertDatabaseCount('fixtures', 0);
     }
 
     public function test_live_sync_refreshes_in_play_details_for_subscribed_fixtures(): void

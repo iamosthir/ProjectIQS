@@ -30,6 +30,8 @@ class SeasonAdminResource extends JsonResource
             'standings_synced_at' => $this->standings_synced_at?->toIso8601String(),
             'teams_synced_at' => $this->teams_synced_at?->toIso8601String(),
             'top_scorers_synced_at' => $this->top_scorers_synced_at?->toIso8601String(),
+            'fixtures_count' => $this->whenCounted('fixtures'),
+            'detailed_fixtures_count' => $this->whenCounted('detailed_fixtures_count'),
             'league' => $this->whenLoaded('league', fn () => [
                 'id' => $this->league->id,
                 'external_id' => $this->league->external_id,

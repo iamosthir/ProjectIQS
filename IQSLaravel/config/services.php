@@ -65,6 +65,12 @@ return [
             'lineup_retry_minutes' => (int) env('API_FOOTBALL_SYNC_LINEUP_RETRY_MINUTES', 15),
             // In-play events/statistics refresh cadence per live fixture.
             'live_details_seconds' => (int) env('API_FOOTBALL_SYNC_LIVE_DETAILS_SECONDS', 60),
+            // Details backfill: finished fixtures of subscribed seasons get
+            // their events/lineups/statistics pulled (1 request per fixture,
+            // newest first) — this many per sync:auto tick…
+            'details_backfill_per_run' => (int) env('API_FOOTBALL_SYNC_DETAILS_PER_RUN', 10),
+            // …but only while this much daily budget remains for score syncs.
+            'details_budget_floor' => (int) env('API_FOOTBALL_SYNC_DETAILS_BUDGET_FLOOR', 20),
         ],
     ],
 

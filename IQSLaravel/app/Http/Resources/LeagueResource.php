@@ -37,6 +37,12 @@ class LeagueResource extends JsonResource
                 'year' => $this->currentSeason->year,
                 'label' => $this->currentSeason->label,
             ] : null),
+            'seasons' => $this->whenLoaded('seasons', fn () => $this->seasons->map(fn ($season) => [
+                'id' => $season->id,
+                'year' => $season->year,
+                'label' => $season->label,
+                'is_current' => $season->is_current,
+            ])->values()),
         ];
     }
 }

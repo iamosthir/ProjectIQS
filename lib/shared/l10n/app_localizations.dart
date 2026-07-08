@@ -1028,6 +1028,30 @@ abstract class AppLocalizations {
   /// **'All matches'**
   String get matchesNavAllMatches;
 
+  /// No description provided for @matchesNavAllLeagues.
+  ///
+  /// In en, this message translates to:
+  /// **'All leagues'**
+  String get matchesNavAllLeagues;
+
+  /// No description provided for @matchesNavSeason.
+  ///
+  /// In en, this message translates to:
+  /// **'Season'**
+  String get matchesNavSeason;
+
+  /// No description provided for @matchesNavSelectSeason.
+  ///
+  /// In en, this message translates to:
+  /// **'Select season'**
+  String get matchesNavSelectSeason;
+
+  /// No description provided for @matchesNavCurrentSeason.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get matchesNavCurrentSeason;
+
   /// No description provided for @matchesNavNoMatches.
   ///
   /// In en, this message translates to:

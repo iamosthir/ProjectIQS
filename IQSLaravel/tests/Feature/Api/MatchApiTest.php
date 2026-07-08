@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Fixture;
 use App\Models\League;
+use App\Models\Season;
 use App\Models\TopScorer;
 use App\Models\User;
 use App\Services\Match\TopScorerService;
@@ -91,5 +92,59 @@ class MatchApiTest extends TestCase
             ->assertJsonPath('data.0.player.name', 'High')
             ->assertJsonPath('data.0.rank', 1)
             ->assertJsonPath('data.2.player.name', 'Low');
+    }
+
+    public function test_featured_leagues_are_listed_first(): void
+    {
+        League::factory()->create(['tier' => 1, 'name_en' => 'Plain', 'is_featured' => false]);
+        League::factory()->create(['tier' => 3, 'name_en' => 'Featured', 'is_featured' => true]);
+
+        $this->getJson('/api/v1/leagues')
+            ->assertOk()
+            ->assertJsonPath('data.0.name', 'Featured')
+            ->assertJsonPath('data.1.name', 'Plain');
+    }
+
+    public function test_league_detail_lists_its_seasons_newest_first(): void
+    {
+        $league = League::factory()->create();
+        Season::factory()->for($league)->create(['year' => 2024, 'is_current' => false]);
+        Season::factory()->for($league)->create(['year' => 2025, 'is_current' => true]);
+
+        $this->getJson("/api/v1/leagues/{$league->id}")
+            ->assertOk()
+            ->assertJsonCount(2, 'data.seasons')
+            ->assertJsonPath('data.seasons.0.year', 2025)
+            ->assertJsonPath('data.seasons.0.is_current', true)
+            ->assertJsonPath('data.seasons.1.year', 2024);
+    }
+
+    public function test_league_fixtures_filter_by_season_year(): void
+    {
+        $league = League::factory()->create();
+        $old = Season::factory()->for($league)->create(['year' => 2024, 'is_current' => false]);
+        $current = Season::factory()->for($league)->create(['year' => 2025, 'is_current' => true]);
+        $oldFixture = Fixture::factory()->for($league)->create(['season_id' => $old->id]);
+        $currentFixture = Fixture::factory()->for($league)->create(['season_id' => $current->id]);
+
+        // No param → all fixtures of the league (back-compat).
+        $this->getJson("/api/v1/leagues/{$league->id}/fixtures")
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $this->getJson("/api/v1/leagues/{$league->id}/fixtures?season=2024")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $oldFixture->id);
+
+        $this->getJson("/api/v1/leagues/{$league->id}/fixtures?season=2025")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $currentFixture->id);
+
+        // Unknown year → empty, not "all seasons".
+        $this->getJson("/api/v1/leagues/{$league->id}/fixtures?season=1999")
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 }

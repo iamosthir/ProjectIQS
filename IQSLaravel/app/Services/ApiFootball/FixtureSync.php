@@ -40,7 +40,10 @@ class FixtureSync extends FootballSync
         $goals = [];
         $finished = [];
 
-        $processed = $this->upsertFixtures($rows, function (Fixture $fixture, array $old) use (&$kickoff, &$goals, &$finished): void {
+        // `live=all` is global — only store fixtures of ACTIVE leagues so an
+        // all-countries league import (inactive by default) doesn't flood the
+        // fixtures table with every live match on the planet.
+        $processed = $this->upsertFixtures($rows, activeLeaguesOnly: true, after: function (Fixture $fixture, array $old) use (&$kickoff, &$goals, &$finished): void {
             $new = $fixture->status_group?->value;
             $newGoals = (int) ($fixture->home_goals ?? 0) + (int) ($fixture->away_goals ?? 0);
 
@@ -61,8 +64,9 @@ class FixtureSync extends FootballSync
     /**
      * @param  array<int, array<string, mixed>>  $rows
      * @param  callable(Fixture, array{status_group: ?string, goals: int}):void|null  $after
+     * @param  bool  $activeLeaguesOnly  skip fixtures whose league is inactive (live poll)
      */
-    protected function upsertFixtures(array $rows, ?callable $after = null): int
+    protected function upsertFixtures(array $rows, ?callable $after = null, bool $activeLeaguesOnly = false): int
     {
         $count = 0;
 
@@ -78,7 +82,10 @@ class FixtureSync extends FootballSync
                 continue;
             }
 
-            $leagueId = League::query()->apiFootball()->where('external_id', $lg['id'] ?? 0)->value('id');
+            $leagueId = League::query()->apiFootball()
+                ->when($activeLeaguesOnly, fn ($q) => $q->where('is_active', true))
+                ->where('external_id', $lg['id'] ?? 0)
+                ->value('id');
             $homeId = $this->resolveTeamId($teams['home'] ?? []);
             $awayId = $this->resolveTeamId($teams['away'] ?? []);
 

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Sync;
 
+use App\Models\Country;
 use App\Models\League;
+use App\Services\ApiFootball\CountrySync;
 use App\Services\ApiFootball\LeagueSync;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -72,6 +74,54 @@ class ApiFootballSyncTest extends TestCase
         $row = League::where('external_id', 39)->first();
         $this->assertSame('الدوري الإنجليزي', $row->name_ar); // admin override kept
         $this->assertSame('Second', $row->name_en);          // English refreshed
+    }
+
+    public function test_non_iraqi_leagues_import_inactive_and_admin_activation_survives_resync(): void
+    {
+        Http::fakeSequence()
+            ->push($this->payload([$this->premier()]), 200, ['x-ratelimit-requests-remaining' => '95'])
+            ->push($this->payload([$this->premier()]), 200, ['x-ratelimit-requests-remaining' => '94']);
+
+        app(LeagueSync::class)->sync();
+
+        $league = League::where('external_id', 39)->firstOrFail();
+        $this->assertFalse($league->is_active); // England → hidden until an admin opts in
+
+        $league->update(['is_active' => true]); // admin activates
+        app(LeagueSync::class)->sync();
+
+        $this->assertTrue($league->refresh()->is_active); // re-sync never flips it back
+    }
+
+    public function test_iraqi_leagues_import_active_and_country_scope_reaches_the_api(): void
+    {
+        $row = [
+            'league' => ['id' => 542, 'name' => 'Iraqi League', 'type' => 'League', 'logo' => null],
+            'country' => ['name' => 'Iraq', 'code' => 'IQ', 'flag' => null],
+            'seasons' => [],
+        ];
+        Http::fake(['*' => Http::response(['response' => [$row]], 200)]);
+
+        app(LeagueSync::class)->sync('Iraq');
+
+        $this->assertDatabaseHas('leagues', ['external_id' => 542, 'is_iraqi' => true, 'is_active' => true]);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'country=Iraq'));
+    }
+
+    public function test_countries_sync_upserts_without_duplicates(): void
+    {
+        Http::fake(['*' => Http::response(['response' => [
+            ['name' => 'England', 'code' => 'GB-ENG', 'flag' => 'gb-eng.svg'],
+            ['name' => 'World', 'code' => null, 'flag' => null],
+        ]], 200)]);
+
+        app(CountrySync::class)->sync();
+        app(CountrySync::class)->sync(); // re-run
+
+        $this->assertSame(2, Country::count());
+        $this->assertDatabaseHas('countries', [
+            'name_en' => 'England', 'code' => 'GB-ENG', 'source' => 'api_football',
+        ]);
     }
 
     public function test_every_call_is_logged(): void

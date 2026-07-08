@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\Admin\SeasonAdminResource;
 use App\Http\Resources\Admin\SyncLogResource;
 use App\Models\ApiFootballSyncLog;
+use App\Models\Country;
 use App\Models\Fixture;
 use App\Models\Season;
 use App\Services\ApiFootball\ApiFootballClient;
 use App\Services\ApiFootball\ApiFootballException;
+use App\Services\ApiFootball\AutoSyncService;
+use App\Services\ApiFootball\CountrySync;
 use App\Services\ApiFootball\FixtureDetailSync;
 use App\Services\ApiFootball\FixtureSync;
 use App\Services\ApiFootball\LeagueSync;
@@ -28,7 +31,33 @@ class SyncController extends Controller
 {
     public function leagues(Request $request, LeagueSync $sync): JsonResponse
     {
-        return $this->run(fn () => $sync->sync($request->boolean('iraqi')));
+        $data = $request->validate(['country' => ['nullable', 'string', 'max:100']]);
+
+        // `country` scopes the import ("Iraq", "England", "World"…); the
+        // legacy `iraqi` flag maps onto it; neither → all countries.
+        $country = ($data['country'] ?? null) ?: ($request->boolean('iraqi') ? 'Iraq' : null);
+
+        return $this->run(fn () => $sync->sync($country));
+    }
+
+    /**
+     * Refresh the API-Football countries list (feeds the country picker).
+     */
+    public function syncCountries(CountrySync $sync): JsonResponse
+    {
+        return $this->run(fn () => $sync->sync());
+    }
+
+    /**
+     * Country options for the Sync Console picker (~170 rows, unpaginated).
+     */
+    public function countryOptions(): JsonResponse
+    {
+        return $this->ok(
+            Country::query()
+                ->orderBy('name_en')
+                ->get(['id', 'name_ar', 'name_en', 'code', 'flag_path'])
+        );
     }
 
     public function teams(Request $request, TeamSync $sync): JsonResponse
@@ -77,6 +106,10 @@ class SyncController extends Controller
         $seasons = Season::query()
             ->autoSync()
             ->with('league')
+            ->withCount([
+                'fixtures',
+                'fixtures as detailed_fixtures_count' => fn ($q) => $q->whereNotNull('details_synced_at'),
+            ])
             ->orderByDesc('year')
             ->get();
 
@@ -103,6 +136,13 @@ class SyncController extends Controller
             return $this->fail(__('Only seasons of API-Football leagues can be auto-synced. Manual leagues are maintained from the match module.'), null, 422);
         }
 
+        // Subscribing means "show this league in the app" — activate leagues
+        // that were imported inactive (non-Iraqi default) so the synced data
+        // is actually reachable and the live poll stores their fixtures.
+        if ($enabled && ! $season->league->is_active) {
+            $season->league->update(['is_active' => true]);
+        }
+
         $season->forceFill($enabled ? [
             'auto_sync' => true,
             'fixtures_synced_at' => null,
@@ -115,6 +155,28 @@ class SyncController extends Controller
             new SeasonAdminResource($season),
             $enabled ? __('Auto-sync enabled — the first full pull starts within a minute.') : __('Auto-sync disabled.'),
         );
+    }
+
+    /**
+     * "Sync now" — force-run all tiers (fixtures/standings/teams/scorers)
+     * for one season immediately, regardless of cadence or the scheduler.
+     */
+    public function runAutoSeason(Season $season, AutoSyncService $sync): JsonResponse
+    {
+        $season->loadMissing('league');
+
+        if ($season->league->source !== Source::ApiFootball || $season->league->external_id === null) {
+            return $this->fail(__('Only seasons of API-Football leagues can be synced.'), null, 422);
+        }
+
+        $summary = $sync->runSeason($season);
+        $processed = $summary['fixtures'] + $summary['standings'] + $summary['teams'] + $summary['top_scorers'];
+
+        if ($summary['errors'] !== []) {
+            return $this->fail(implode("\n", $summary['errors']), null, 422);
+        }
+
+        return $this->ok(['processed' => $processed], __('Sync completed.'));
     }
 
     public function logs(Request $request): JsonResponse

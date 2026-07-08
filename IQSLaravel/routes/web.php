@@ -66,6 +66,13 @@ Route::get('/storage-link', function () {
     return Artisan::output() ?: 'Storage link created.';
 });
 
+// Temporary: run pending migrations over HTTP (delete after use).
+Route::get('/run-migrations', function () {
+    Artisan::call('migrate', ['--force' => true]);
+
+    return '<pre>'.e(Artisan::output() ?: 'Nothing to migrate.').'</pre>';
+});
+
 /*
 |--------------------------------------------------------------------------
 | Admin JSON API — /admin/api/v1/*
@@ -203,6 +210,11 @@ Route::prefix('admin/api/v1')->name('admin.api.')->group(function (): void {
                 // Automatic sync subscriptions (seasons.auto_sync)
                 Route::get('auto', [SyncController::class, 'autoStatus']);
                 Route::post('auto/seasons/{season}', [SyncController::class, 'toggleAuto']);
+                Route::post('auto/seasons/{season}/run', [SyncController::class, 'runAutoSeason']);
+
+                // Country picker for scoped league imports
+                Route::get('countries', [SyncController::class, 'countryOptions']);
+                Route::post('countries', [SyncController::class, 'syncCountries']);
             });
             Route::post('fixtures/{fixture}/sync-details', [SyncController::class, 'fixtureDetails']);
         });

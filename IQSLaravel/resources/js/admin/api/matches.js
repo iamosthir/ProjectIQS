@@ -84,6 +84,11 @@ export const matchesApi = {
     // Auto-sync subscriptions (seasons.auto_sync)
     syncAutoStatus: () => client.get('/sync/auto'),
     toggleSeasonAutoSync: (seasonId, p) => client.post(`/sync/auto/seasons/${seasonId}`, p),
+    runSeasonAutoSync: (seasonId) => client.post(`/sync/auto/seasons/${seasonId}/run`),
+
+    // Country picker for scoped league imports
+    syncCountryOptions: () => client.get('/sync/countries'),
+    syncCountries: () => client.post('/sync/countries'),
 
     // Comment moderation
     comments: (params = {}) => client.get('/comments', { params }),
